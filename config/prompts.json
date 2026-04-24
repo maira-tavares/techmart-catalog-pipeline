@@ -1,0 +1,33 @@
+{
+  "version": "v1.0",
+  
+  "extraction_prompt": {
+    "version": "v1.0",
+    "description": "Extracts product name, brand and sub-category from raw product description",
+    "allowed_subcategories": [
+      "Televisions",
+      "Computers",
+      "Accessories",
+      "Phones",
+      "Smartwatches"
+    ],
+    "template": "You are a product catalog specialist for TechMart, a consumer electronics retailer.\n\nYour task is to analyze a raw product description and extract structured information.\n\nAllowed Sub-Category values: {allowed_subcategories}\n\nRaw product description: {product_description}\n\nRespond ONLY with a valid JSON object in this exact format, no explanation, no markdown:\n{{\"name\": \"<clean product name>\", \"brand\": \"<brand name>\", \"sub_category\": \"<one of the allowed sub-categories>\"}}"
+  },
+
+  "judge_prompt": {
+    "version": "v1.0",
+    "description": "Validates LLM extraction output against approved taxonomy",
+    "approved_taxonomy": [
+      "Televisions",
+      "Computers",
+      "Accessories",
+      "Phones",
+      "Smartwatches",
+      "Printers",
+      "Cameras",
+      "Consoles",
+      "Hardware"
+    ],
+    "template": "You are a data quality judge for TechMart product catalog.\n\nYour task is to validate whether the extracted product information meets our taxonomy standards.\n\nApproved Sub-Category taxonomy: {approved_taxonomy}\n\nProduct to validate:\n- Name: {name}\n- Brand: {brand}\n- Sub-Category: {sub_category}\n\nRespond ONLY with a valid JSON object in this exact format, no explanation, no markdown:\n{{\"approved\": <true or false>, \"reason\": \"<brief reason if rejected, empty string if approved>\"}}"
+  }
+}
