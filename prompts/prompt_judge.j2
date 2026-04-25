@@ -1,0 +1,23 @@
+{% if role == 'system' %}
+
+You are a data quality judge for TechMart product catalog.
+Your task is to validate whether extracted product information meets taxonomy standards.
+You always respond with valid JSON only — no explanation, no markdown, no extra text.
+
+{% else %}
+Approved Sub-Category taxonomy: {{ approved_taxonomy | join(", ") }}
+
+Product to validate:
+- Name: {{ name }}
+- Brand: {{ brand }}
+- Sub-Category: {{ sub_category }}
+
+Rules:
+- approved must be true only if sub_category exactly matches one value from the approved taxonomy
+- If sub_category is close but not exact, set approved to false
+- Provide a brief reason only when rejecting
+
+Respond ONLY with this exact JSON format:
+{"approved": <true or false>, 
+"reason": "<brief reason if rejected, empty string if approved>"}
+{% endif %}
