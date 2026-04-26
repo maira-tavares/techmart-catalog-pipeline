@@ -9,6 +9,8 @@ import time
 import requests
 from pathlib import Path
 from typing import Optional
+import json
+from pydantic import ValidationError
 
 def load_prompt(prompts_dir: Path,template_name: str,role: str,**kwargs: Any) -> str:
     """
@@ -45,40 +47,53 @@ def load_prompt_template_raw(prompts_dir: Path, template_name: str) -> str:
     template_path = prompts_dir / template_name
     with open(template_path, "r") as f:
         return f.read()
-    
+
 def call_llm(
-    messages : list,
-    api_key  : str,
-    api_url  : str,
-    model    : str,
-    temperature  : float = 0.1,
-    max_tokens   : int   = 200,
-    timeout      : int   = 30
+    messages    : list,
+    api_key     : str,
+    api_url     : str,
+    model       : str,
+    temperature : float = 0.1,
+    max_tokens  : int   = 200,
+    timeout     : int   = 30,
+    max_retries : int   = 3,
+    retry_delay : float = 1.0,
+    output_model        = None  # Optional Pydantic model for JSON validation
 ) -> dict:
     """
-    Generic LLM API call. Knows nothing about prompts or business logic.
-    Receives a list of messages and returns the response with observability data.
+    Generic LLM API call with exponential backoff retry logic.
+    Compatible with any OpenAI-format API (Groq, OpenAI, etc.)
+
+    If output_model is provided:
+        - Parses response as JSON
+        - Validates against the Pydantic model
+        - Retries if validation fails
+    If output_model is None:
+        - Returns raw response text
+        - No JSON parsing or validation
 
     Args:
-        messages   : List of {"role": ..., "content": ...} dicts
-        api_key    : API key for authentication
-        api_url    : Full API endpoint URL
-        model      : Model name to use
-        temperature: Sampling temperature (default 0.1 for deterministic output)
-        max_tokens : Maximum tokens in response
-        timeout    : Request timeout in seconds
+        messages    : List of {"role": ..., "content": ...} dicts.
+        api_key     : API key for authentication.
+        api_url     : Full API endpoint URL.
+        model       : Model name.
+        temperature : Sampling temperature.
+        max_tokens  : Max tokens in response.
+        timeout     : Request timeout in seconds.
+        max_retries : Maximum retry attempts.
+        retry_delay : Base delay in seconds — doubles on each retry.
+        output_model: Optional Pydantic model class to validate JSON response.
+                      e.g. ProductExtraction, JudgeResult, or None.
 
     Returns:
-        dict with:
-            response_text  : raw text response from the LLM
-            input_tokens   : tokens consumed in input
-            output_tokens  : tokens consumed in output
-            total_tokens   : total tokens consumed
-            latency_seconds: API response time in seconds
+        dict with response_text, input_tokens, output_tokens,
+        total_tokens, latency_seconds, attempt_number.
+        If output_model is provided, also includes validated_output.
 
     Raises:
-        ValueError: if the API returns a non-200 status code
+        ValueError: if all retry attempts fail.
     """
+
     payload = {
         "model"      : model,
         "messages"   : messages,
@@ -86,31 +101,108 @@ def call_llm(
         "max_tokens" : max_tokens
     }
 
-    start_time = time.time()
+    last_error  = None
+    total_start = time.time()
 
-    response = requests.post(
-        api_url,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        },
-        json=payload,
-        timeout=timeout
+    for attempt in range(1, max_retries + 1):
+
+        try:
+            attempt_start = time.time()
+
+            response = requests.post(
+                api_url,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                },
+                json=payload,
+                timeout=timeout
+            )
+
+            latency = round(time.time() - attempt_start, 3)
+
+            # ── Status 200: HTTP success ──────────────────────────────────────
+            if response.status_code == 200:
+                response_json = response.json()
+                response_text = response_json["choices"][0]["message"]["content"]
+                usage         = response_json.get("usage", {})
+
+                base_result = {
+                    "response_text"  : response_text,
+                    "input_tokens"   : usage.get("prompt_tokens", 0),
+                    "output_tokens"  : usage.get("completion_tokens", 0),
+                    "total_tokens"   : usage.get("total_tokens", 0),
+                    "latency_seconds": latency,
+                    "attempt_number" : attempt
+                }
+
+                # ── Optional output validation ────────────────────────────────
+                # Only runs if caller passed a Pydantic model
+                # If not passed → returns raw response immediately
+                if output_model is not None:
+                    try:
+                        # Step 1 — Clean markdown formatting
+                        clean = (
+                            response_text
+                            .strip()
+                            .replace("```json", "")
+                            .replace("```", "")
+                            .strip()
+                        )
+
+                        # Step 2 — Parse JSON string into Python dict
+                        parsed = json.loads(clean)
+
+                        # Step 3 — Validate dict against Pydantic model
+                        validated = output_model(**parsed)
+
+                        # ✅ Validation passed — add to result and return
+                        base_result["validated_output"] = validated
+                        return base_result
+
+                    except (ValidationError, json.JSONDecodeError, KeyError) as ve:
+                        # ❌ Validation failed — retry
+                        # The HTTP call worked but the content is wrong
+                        wait_time = retry_delay * (2 ** (attempt - 1))
+                        print(f"⚠️ Output validation failed (attempt {attempt}/{max_retries}): {ve}. Retrying in {wait_time}s...")
+                        time.sleep(wait_time)
+                        last_error = f"Output validation error: {ve}"
+                        continue
+
+                # ── No output_model — return raw response ─────────────────────
+                return base_result
+
+            # ── Status 429: rate limit ────────────────────────────────────────
+            elif response.status_code == 429:
+                wait_time = retry_delay * (2 ** (attempt - 1))
+                print(f"⚠️ Rate limit (attempt {attempt}/{max_retries}). Waiting {wait_time}s...")
+                time.sleep(wait_time)
+                last_error = f"Rate limit: {response.text}"
+
+            # ── Other API errors ──────────────────────────────────────────────
+            else:
+                wait_time = retry_delay * (2 ** (attempt - 1))
+                print(f"⚠️ API error {response.status_code} (attempt {attempt}/{max_retries}). Waiting {wait_time}s...")
+                time.sleep(wait_time)
+                last_error = f"API error {response.status_code}: {response.text}"
+
+        # ── Network timeout ───────────────────────────────────────────────────
+        except requests.exceptions.Timeout:
+            wait_time = retry_delay * (2 ** (attempt - 1))
+            print(f"⚠️ Timeout (attempt {attempt}/{max_retries}). Waiting {wait_time}s...")
+            time.sleep(wait_time)
+            last_error = "Request timeout"
+
+        # ── Connection error ──────────────────────────────────────────────────
+        except requests.exceptions.ConnectionError:
+            wait_time = retry_delay * (2 ** (attempt - 1))
+            print(f"⚠️ Connection error (attempt {attempt}/{max_retries}). Waiting {wait_time}s...")
+            time.sleep(wait_time)
+            last_error = "Connection error"
+
+    # ── All retries exhausted ─────────────────────────────────────────────────
+    total_time = round(time.time() - total_start, 3)
+    raise ValueError(
+        f"All {max_retries} attempts failed after {total_time}s. "
+        f"Last error: {last_error}"
     )
-
-    latency = round(time.time() - start_time, 3)
-
-    if response.status_code != 200:
-        raise ValueError(f"API error {response.status_code}: {response.text}")
-
-    response_json = response.json()
-    response_text = response_json["choices"][0]["message"]["content"]
-    usage         = response_json.get("usage", {})
-
-    return {
-        "response_text" : response_text,
-        "input_tokens"  : usage.get("prompt_tokens", 0),
-        "output_tokens" : usage.get("completion_tokens", 0),
-        "total_tokens"  : usage.get("total_tokens", 0),
-        "latency_seconds": latency
-    }

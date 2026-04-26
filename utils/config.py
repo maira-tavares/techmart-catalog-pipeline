@@ -43,7 +43,7 @@ GOLD_SUMMARY      = "main.gold_techmart.product_summary"
 #  LLM configuration 
 #############################################################################################
 LLM_PROVIDER = "groq"
-LLM_MODEL    = "llama-3.1-8b-instant"
+LLM_MODEL    = "llama-3.3-70b-versatile"
 LLM_API_URL  = "https://api.groq.com/openai/v1/chat/completions"
 LLM_API_KEY  = dbutils.secrets.get(scope="techmart", key="groq-api-key")
 

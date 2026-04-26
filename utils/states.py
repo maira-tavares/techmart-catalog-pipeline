@@ -20,26 +20,31 @@ class ProductExtraction(BaseModel):
 class JudgeResult(BaseModel):
     """
     Validates the output of the LLM Judge step.
-    Ensures approved is a boolean and reason is a string.
+    
+    judge_taxonomy : The Judge's own classification of the product.
+                     Must be one value from the approved taxonomy.
+    judge_approved : True if judge_taxonomy matches extracted sub_category.
+                     False if the Judge disagrees with the extractor.
+    reason         : Explanation when judge_approved is False.
     """
-    approved: bool = Field(..., description="Whether the extraction passed taxonomy validation")
-    reason  : str  = Field(default="", description="Reason for rejection if not approved")
+    judge_taxonomy : str  = Field(..., description="Judge's own sub-category classification")
+    judge_approved : bool = Field(..., description="True if judge agrees with extractor")
+    reason         : str  = Field(default="", description="Reason for disagreement")
 
-
-class ProductState(BaseModel):
-    """
-    Represents the full state of a product through the pipeline.
-    Tracks every field from raw input to final validated output.
-    """
-    product_id   : int
-    description  : str
-    name         : Optional[str]  = None
-    brand        : Optional[str]  = None
-    sub_category : Optional[str]  = None
-    judge_approved: Optional[bool] = None
-    judge_reason  : Optional[str]  = None
-    llm_status    : Optional[str]  = None
-    input_tokens  : Optional[int]  = None
-    output_tokens : Optional[int]  = None
-    latency_seconds: Optional[float] = None
-    prompt_version: Optional[str]  = None
+# class ProductState(BaseModel):
+#     """
+#     Represents the full state of a product through the pipeline.
+#     Tracks every field from raw input to final validated output.
+#     """
+#     product_id   : int
+#     description  : str
+#     name         : Optional[str]  = None
+#     brand        : Optional[str]  = None
+#     sub_category : Optional[str]  = None
+#     judge_approved: Optional[bool] = None
+#     judge_reason  : Optional[str]  = None
+#     llm_status    : Optional[str]  = None
+#     input_tokens  : Optional[int]  = None
+#     output_tokens : Optional[int]  = None
+#     latency_seconds: Optional[float] = None
+#     prompt_version: Optional[str]  = None
