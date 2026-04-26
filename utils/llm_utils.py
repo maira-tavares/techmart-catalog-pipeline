@@ -55,9 +55,9 @@ def call_llm(
     model       : str,
     temperature : float = 0.1,
     max_tokens  : int   = 200,
-    timeout     : int   = 30,
-    max_retries : int   = 3,
-    retry_delay : float = 1.0,
+    timeout     : int   = 60,
+    max_retries : int   = 5,
+    retry_delay : float = 20.0,
     output_model        = None  # Optional Pydantic model for JSON validation
 ) -> dict:
     """

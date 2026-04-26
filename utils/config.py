@@ -30,20 +30,34 @@ except Exception:
 #############################################################################################
 #  Delta table names
 #############################################################################################
-BRONZE_PRODUCTS   = "main.bronze_techmart.raw_products"
-BRONZE_VENDORS    = "main.bronze_techmart.raw_vendors"
-SILVER_PRODUCTS   = "main.silver_techmart.products"
-SILVER_VENDORS    = "main.silver_techmart.vendors"
-LLM_EXTRACTED     = "main.silver_techmart.llm_extracted"
-SILVER_TAXONOMY   = "main.silver_techmart.taxonomy"
-TAXONOMY_ENRICHED = "main.silver_techmart.taxonomy_enriched"
-GOLD_SUMMARY      = "main.gold_techmart.product_summary"
+# ── Delta schema names ────────────────────────────────────────────────────────
+# Convention: project_layer — groups all project schemas alphabetically in Catalog
+BRONZE_SCHEMA = "techmart_bronze"
+SILVER_SCHEMA = "techmart_silver"
+GOLD_SCHEMA   = "techmart_gold"
+
+# ── Volume paths ──────────────────────────────────────────────────────────────
+# Raw source files are stored in a Unity Catalog Volume
+# Volume lives inside techmart_bronze schema
+PRODUCTS_FILE = f"/Volumes/main/{BRONZE_SCHEMA}/raw_files/electronics_dataset_products.xlsx"
+VENDORS_FILE  = f"/Volumes/main/{BRONZE_SCHEMA}/raw_files/electronics_dataset_vendors.xlsx"
+
+# ── Delta table names ─────────────────────────────────────────────────────────
+BRONZE_PRODUCTS   = f"main.{BRONZE_SCHEMA}.raw_products"
+BRONZE_VENDORS    = f"main.{BRONZE_SCHEMA}.raw_vendors"
+SILVER_PRODUCTS   = f"main.{SILVER_SCHEMA}.products"
+SILVER_VENDORS    = f"main.{SILVER_SCHEMA}.vendors"
+LLM_EXTRACTED     = f"main.{SILVER_SCHEMA}.llm_extracted"
+SILVER_TAXONOMY   = f"main.{SILVER_SCHEMA}.taxonomy"
+TAXONOMY_ENRICHED = f"main.{SILVER_SCHEMA}.taxonomy_enriched"
+GOLD_SUMMARY      = f"main.{GOLD_SCHEMA}.product_summary"
+
 
 #############################################################################################
 #  LLM configuration 
 #############################################################################################
 LLM_PROVIDER = "groq"
-LLM_MODEL    = "llama-3.3-70b-versatile"
+LLM_MODEL    = "llama-3.1-8b-instant"# "llama-3.3-70b-versatile"
 LLM_API_URL  = "https://api.groq.com/openai/v1/chat/completions"
 LLM_API_KEY  = dbutils.secrets.get(scope="techmart", key="groq-api-key")
 
