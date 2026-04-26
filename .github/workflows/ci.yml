@@ -1,0 +1,49 @@
+# .github/workflows/ci.yml
+# CI pipeline for TechMart Catalog Intelligence Pipeline
+# Runs automatically on every push and pull request to main branch
+# Verifies that all transformation functions pass unit tests
+
+name: TechMart Pipeline CI
+
+# Define when this workflow runs
+on:
+  push:
+    branches: [ main ]        # runs on every push to main
+  pull_request:
+    branches: [ main ]        # runs on every pull request to main
+
+jobs:
+  test:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest    # runs on a fresh Linux machine in GitHub's cloud
+
+    steps:
+      # Step 1 — Check out the repository code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2 — Set up Python environment
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Step 3 — Install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+
+      # Step 4 — Run unit tests
+      # -v flag shows each test result individually
+      # --tb=short shows a short traceback on failure
+      - name: Run unit tests
+        run: |
+          python -m pytest tests/test_transformations.py -v --tb=short
+
+      # Step 5 — Show test summary
+      - name: Test summary
+        if: always()    # runs even if tests fail
+        run: |
+          echo "CI pipeline complete"
+          echo "Check test results above"
