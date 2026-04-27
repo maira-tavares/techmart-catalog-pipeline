@@ -12,6 +12,7 @@ from typing import Optional
 import json
 from pydantic import ValidationError
 
+
 def load_prompt(prompts_dir: Path,template_name: str,role: str,**kwargs: Any) -> str:
     """
     Loads and renders a Jinja2 prompt template for a given role.
@@ -35,8 +36,6 @@ def load_prompt(prompts_dir: Path,template_name: str,role: str,**kwargs: Any) ->
     template = env.get_template(template_name)
 
     return template.render(role=role, **kwargs)
-
-# utils/config.py — adiciona essa função no final
 
 def load_prompt_template_raw(prompts_dir: Path, template_name: str) -> str:
     """

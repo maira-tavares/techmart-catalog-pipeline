@@ -59,8 +59,13 @@ GOLD_SUMMARY      = f"main.{GOLD_SCHEMA}.product_summary"
 LLM_PROVIDER = "groq"
 LLM_MODEL    = "llama-3.1-8b-instant"# "llama-3.3-70b-versatile"
 LLM_API_URL  = "https://api.groq.com/openai/v1/chat/completions"
-LLM_API_KEY  = dbutils.secrets.get(scope="techmart", key="groq-api-key")
-
+# LLM_API_KEY  = dbutils.secrets.get(scope="techmart", key="groq-api-key")
+def get_api_key(dbutils) -> str:
+    """
+    Retrieves the Groq API key from Databricks Secrets Manager.
+    dbutils must be passed from the calling notebook context.
+    """
+    return dbutils.secrets.get(scope="techmart", key="groq-api-key")
 
 #############################################################################################
 #  Allowed values (taxonomy)
