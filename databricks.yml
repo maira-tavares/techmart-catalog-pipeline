@@ -1,0 +1,114 @@
+# databricks.yml
+# Databricks Asset Bundle configuration for TechMart Catalog Intelligence Pipeline.
+# This file defines the pipeline as code — making it reproducible and
+# deployable to any Databricks workspace with a single command.
+#
+# Deploy with: databricks bundle deploy --target dev
+# Run with:    databricks bundle run techmart_pipeline --target dev
+bundle:
+  name: techmart-catalog-pipeline
+# ── Variables ────────────────────────────────────────────────────────────────
+# Variables allow environment-specific configuration
+# Values change between dev, staging and production without code changes
+variables:
+  catalog:
+    description: Unity Catalog name
+    default: main
+  groq_secret_scope:
+    description: Databricks secret scope containing the Groq API key
+    default: techmart
+# ── Targets ──────────────────────────────────────────────────────────────────
+# Targets define different deployment environments
+# Each target can override variables and resource configurations
+targets:
+  dev:
+    # Development environment — uses current workspace
+    mode: development
+    default: true
+    variables:
+      catalog: main
+  prod:
+    # Production environment — stricter settings
+    mode: production
+    variables:
+      catalog: main
+# ── Resources ────────────────────────────────────────────────────────────────
+# Resources define the Databricks assets that DABs will create and manage
+resources:
+  jobs:
+    # Main pipeline job — orchestrates all 6 stages end-to-end
+    techmart_pipeline:
+      name: TechMart Catalog Intelligence Pipeline
+      # Email notifications on failure
+      email_notifications:
+        on_failure:
+          - ts.maira@gmail.com
+      # Job-level tags for organization and cost tracking
+      tags:
+        project: techmart
+        layer: pipeline
+        team: data-engineering
+      # Cluster configuration — serverless for cost efficiency
+      job_clusters:
+        - job_cluster_key: main_cluster
+          new_cluster:
+            spark_version: 15.4.x-scala2.12
+            node_type_id: Standard_DS3_v2
+            num_workers: 1
+            spark_env_vars:
+              PYSPARK_PYTHON: /databricks/python3/bin/python3
+      # Pipeline tasks — each notebook is a task
+      # Tasks run sequentially — each depends on the previous
+      tasks:
+        - task_key: bronze_ingest
+          description: "Stage 1: Ingest raw Excel files into Bronze Delta tables"
+          job_cluster_key: main_cluster
+          notebook_task:
+            notebook_path: pipeline/01_bronze_ingest
+            base_parameters:
+              catalog: "{{variables.catalog}}"
+        - task_key: silver_standardize
+          description: "Stage 2: Normalize weight, price and vendor names"
+          depends_on:
+            - task_key: bronze_ingest
+          job_cluster_key: main_cluster
+          notebook_task:
+            notebook_path: pipeline/02_silver_standardize
+            base_parameters:
+              catalog: "{{variables.catalog}}"
+        - task_key: llm_extraction
+          description: "Stage 3: Extract product fields using LLM"
+          depends_on:
+            - task_key: silver_standardize
+          job_cluster_key: main_cluster
+          notebook_task:
+            notebook_path: pipeline/03_llm_extraction
+            base_parameters:
+              catalog: "{{variables.catalog}}"
+        - task_key: llm_judge
+          description: "Stage 4: Validate LLM extraction using LLM-as-Judge"
+          depends_on:
+            - task_key: llm_extraction
+          job_cluster_key: main_cluster
+          notebook_task:
+            notebook_path: pipeline/04_llm_judge
+            base_parameters:
+              catalog: "{{variables.catalog}}"
+        - task_key: silver_taxonomy
+          description: "Stage 5: Enrich taxonomy with vendor info and categories"
+          depends_on:
+            - task_key: llm_judge
+          job_cluster_key: main_cluster
+          notebook_task:
+            notebook_path: pipeline/05_silver_taxonomy
+            base_parameters:
+              catalog: "{{variables.catalog}}"
+        - task_key: gold_aggregation
+          description: "Stage 6: Produce business-ready aggregated Gold table"
+          depends_on:
+            - task_key: silver_taxonomy
+          job_cluster_key: main_cluster
+          notebook_task:
+            notebook_path: pipeline/06_gold_aggregation
+            base_parameters:
+              catalog: "{{variables.catalog}}"
