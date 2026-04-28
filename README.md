@@ -74,11 +74,12 @@ techmart-catalog-pipeline/
 │   └── 06_gold_aggregation          # Stage 6: Business aggregation
 │
 ├── setup_pipeline/                  # One-time setup scripts
-│   ├── 07_idempotency_check         # Validates pipeline idempotency
-│   ├── 08_data_quality              # Applies Delta constraints
-│   └── 09_schema_evolution_demo     # Demonstrates schema evolution
+│   ├── idempotency_check         # Validates pipeline idempotency
+│   ├── data_quality              # Applies Delta constraints
+│   └── schema_evolution_demo     # Demonstrates schema evolution
 │
 ├── utils/                           # Shared utilities
+│   ├── __init__.py 
 │   ├── config.py                    # Centralized configuration and secrets
 │   ├── llm_utils.py                 # Generic LLM call with retry logic
 │   └── states.py                    # Pydantic models for LLM output validation
@@ -184,8 +185,8 @@ databricks secrets put --scope techmart --key groq-api-key --string-value "your-
 
 ### 4 — Run Setup Scripts
 Run these notebooks once in order:
-1. `setup_pipeline/08_data_quality` — applies Delta constraints
-2. `setup_pipeline/09_schema_evolution_demo` — optional demo
+1. `setup_pipeline/data_quality` — applies Delta constraints
+2. `setup_pipeline/schema_evolution_demo` — optional demo
 
 ### 5 — Run the Pipeline
 Open `pipeline/00_run_pipeline` and click **Run All**.
@@ -225,7 +226,7 @@ Every LLM run logs to the `techmart-llm-extraction` MLflow experiment:
 | What is logged | Type | Example |
 |---------------|------|---------|
 | Prompt template | Artifact | `prompt_extraction.j2` |
-| Prompt version | Parameter | `v2.0-a3f8c21` |
+| Prompt version | Parameter | `v1` |
 | Model | Parameter | `llama-3.1-8b-instant` |
 | Provider | Parameter | `groq` |
 | Total input tokens | Metric | `3420` |
@@ -255,7 +256,7 @@ Run 37 unit tests
 
 ## Idempotency
 
-The pipeline is safe to run multiple times. All writes use `.mode("overwrite")` ensuring that re-running produces identical row counts and data. Verified by `setup_pipeline/07_idempotency_check`.
+The pipeline is safe to run multiple times. All writes use `.mode("overwrite")` with `overwriteSchema=True` ensuring that re-running produces identical row counts and data. Verified by `setup_pipeline/idempotency_check`.
 
 ---
 

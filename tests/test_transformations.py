@@ -1,16 +1,24 @@
 # tests/test_transformations.py
 # Unit tests for Silver layer transformation functions.
-# Tests verify that weight, price and vendor normalization
-# produce correct results for all known edge cases in the dataset.
 #
-# Run with: python -m pytest tests/test_transformations.py -v
+# PURPOSE : Verify that weight, price and vendor normalization produce
+#           correct results for all known edge cases in the dataset.
+# CONTEXT : Functions are duplicated here from 02_silver_standardize
+#           so tests run without Spark/Databricks — pure Python.
+#           This enables fast CI/CD execution via GitHub Actions.
+#
+# Run locally : python -m pytest tests/test_transformations.py -v
+# Run in DB   : use tests/test_runner notebook
 
 import pytest
 import re
 
-# ── Copy transformation functions here for testing ───────────────────────────
-# We duplicate the functions from 02_silver_standardize so tests can run
-# without a Spark/Databricks context — pure Python, runs anywhere including CI/CD
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TRANSFORMATION FUNCTIONS
+# Duplicated from 02_silver_standardize for test isolation.
+# If you update the functions in the notebook, update them here too.
+# ══════════════════════════════════════════════════════════════════════════════
 
 
 def parse_weight_to_kg(raw):
@@ -179,7 +187,9 @@ def normalize_vendor(raw):
     return canonical_map.get(normalized, normalized)
 
 
-# ── Weight Tests ──────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# TESTS
+# ══════════════════════════════════════════════════════════════════════════════
 
 class TestParseWeightToKg:
     """Tests for weight normalization function."""
