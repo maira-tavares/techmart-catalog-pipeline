@@ -1,48 +1,21 @@
 # utils/config.py
 # Central configuration for the TechMart Catalog Intelligence Pipeline.
-
 from pathlib import Path
 import subprocess
-from datetime import datetime
 
-#############################################################################################
-#  Base paths 
-#############################################################################################
-REPO_ROOT   = Path("/Workspace/Repos/ts.maira@gmail.com/techmart-catalog-pipeline")
-PROMPTS_DIR = REPO_ROOT / "prompts"
-UTILS_DIR   = REPO_ROOT / "utils"
-
-#############################################################################################
-#  Prompt template files
-#############################################################################################
-PROMPT_EXTRACTION = "prompt_extraction.j2"
-PROMPT_JUDGE      = "prompt_judge.j2"
-# Version is tied to the Git commit — any change to a prompt file and subsequent commit automatically produces a new traceable version
-try:
-    git_hash = subprocess.check_output(
-        ["git", "rev-parse", "--short", "HEAD"],
-        cwd=str(REPO_ROOT)
-    ).decode("utf-8").strip()
-    PROMPT_VERSION = f"v2.0-{git_hash}"
-except Exception:
-    PROMPT_VERSION = "v2.0-unknown"
-
-#############################################################################################
-#  Delta table names
-#############################################################################################
-# ── Delta schema names ────────────────────────────────────────────────────────
-# Convention: project_layer — groups all project schemas alphabetically in Catalog
+# ══════════════════════════════════════════════════════════════════════════════
+# STORAGE — Schema and table names
+# Convention: project_layer groups all schemas alphabetically in Catalog
+# ══════════════════════════════════════════════════════════════════════════════
 BRONZE_SCHEMA = "techmart_bronze"
 SILVER_SCHEMA = "techmart_silver"
 GOLD_SCHEMA   = "techmart_gold"
 
-# ── Volume paths ──────────────────────────────────────────────────────────────
-# Raw source files are stored in a Unity Catalog Volume
-# Volume lives inside techmart_bronze schema
+# Volume paths — raw source files landing zone
 PRODUCTS_FILE = f"/Volumes/main/{BRONZE_SCHEMA}/raw_files/electronics_dataset_products.xlsx"
 VENDORS_FILE  = f"/Volumes/main/{BRONZE_SCHEMA}/raw_files/electronics_dataset_vendors.xlsx"
 
-# ── Delta table names ─────────────────────────────────────────────────────────
+# Delta table full names: catalog.schema.table
 BRONZE_PRODUCTS   = f"main.{BRONZE_SCHEMA}.raw_products"
 BRONZE_VENDORS    = f"main.{BRONZE_SCHEMA}.raw_vendors"
 SILVER_PRODUCTS   = f"main.{SILVER_SCHEMA}.products"
@@ -53,39 +26,55 @@ TAXONOMY_ENRICHED = f"main.{SILVER_SCHEMA}.taxonomy_enriched"
 GOLD_SUMMARY      = f"main.{GOLD_SCHEMA}.product_summary"
 
 
-#############################################################################################
-#  LLM configuration 
-#############################################################################################
+# ══════════════════════════════════════════════════════════════════════════════
+# LLM — Model and API configuration
+# ══════════════════════════════════════════════════════════════════════════════
+
 LLM_PROVIDER = "groq"
 LLM_MODEL    = "llama-3.1-8b-instant"# "llama-3.3-70b-versatile"
 LLM_API_URL  = "https://api.groq.com/openai/v1/chat/completions"
-# LLM_API_KEY  = dbutils.secrets.get(scope="techmart", key="groq-api-key")
+
+LLM_MAX_RETRIES = 5
+LLM_RETRY_DELAY = 20.0
+LLM_TIMEOUT     = 60
+
 def get_api_key(dbutils) -> str:
     """
     Retrieves the Groq API key from Databricks Secrets Manager.
-    dbutils must be passed from the calling notebook context.
+    API keys are never hardcoded — always retrieved at runtime via Secrets.
+
+    Args:
+        dbutils: Databricks dbutils object — passed from the calling notebook.
+
+    Returns:
+        Groq API key string.
     """
     return dbutils.secrets.get(scope="techmart", key="groq-api-key")
 
-#############################################################################################
-#  Allowed values (taxonomy)
-#############################################################################################
+# ══════════════════════════════════════════════════════════════════════════════
+# PROMPTS — Template filenames and taxonomy values
+# ══════════════════════════════════════════════════════════════════════════════
+PROMPT_FOLDER = "prompts"
+PROMPT_EXTRACTION = "prompt_extraction.j2"
+PROMPT_JUDGE      = "prompt_judge.j2"
+PROMPT_VERSION = "v1"
+
+# Allowed sub-categories passed to the LLM extraction prompt
 ALLOWED_SUBCATEGORIES = [
     "Televisions", "Computers", "Accessories", "Phones", "Smartwatches"
 ]
 
+# Approved taxonomy used by the LLM Judge for validation
 APPROVED_TAXONOMY = [
     "Televisions", "Computers", "Accessories", "Phones", "Smartwatches",
     "Printers", "Cameras", "Consoles", "Hardware"
 ]
-#############################################################################################
-#  MLflow 
-#############################################################################################
-MLFLOW_EXPERIMENT = "/Users/ts.maira@gmail.com/techmart-llm-extraction"
+    
+# ══════════════════════════════════════════════════════════════════════════════
+# MLFLOW — Experiment tracking
+# ══════════════════════════════════════════════════════════════════════════════
+MLFLOW_EXPERIMENT_NAME = "techmart-llm-extraction"
 
 
-#############################################################################################
+# ══════════════════════════════════════════════════════════════════════════════
 print(f"✅ Config loaded")
-print(f"Prompt version : {PROMPT_VERSION}")
-print(f"LLM model      : {LLM_MODEL}")
-print(f"Provider       : {LLM_PROVIDER}")
