@@ -104,24 +104,46 @@ techmart-catalog-pipeline/
 ## Pipeline Stages
 
 ### Stage 1 — Bronze Ingestion
-Reads raw Excel files from a Unity Catalog Volume and writes two Delta tables preserving the data exactly as received. All columns are stored as strings — no transformations at this layer.
+Reads two raw Excel files from a Unity Catalog Volume and writes them as Delta tables preserving data exactly as received. All columns are stored as strings — no transformations at this layer.
+
+| File | Table |
+|------|-------|
+| `electronics_dataset_products.xlsx` | `techmart_bronze.raw_products` |
+| `electronics_dataset_vendors.xlsx` | `techmart_bronze.raw_vendors` |
 
 ### Stage 2 — Silver Standardization
-Applies cleaning and normalization:
-- **Weight:** parses 15+ formats (`"250 grams"`, `"0.96 Kg."`, `"370gr"`) → kg float
-- **Price:** parses 10+ formats (`"$499.99"`, `"59 99"`, `"349,00 usd"`) → USD float
-- **Vendor names:** removes legal suffixes, collapses spaces, maps known duplicates to canonical names
-- **Product descriptions:** lowercased and cleaned for LLM input
+Applies cleaning and normalization to both Bronze tables independently.
+
+**Products** (`raw_products` → `techmart_silver.products`):
+- Weight normalized to kg float — handles 15+ formats
+- Price normalized to USD float — handles 10+ formats
+- Product description lowercased and cleaned for LLM input
+
+**Vendors** (`raw_vendors` → `techmart_silver.vendors`):
+- Legal suffixes removed (Inc, Ltd, Co, Corp)
+- Extra spaces collapsed
+- Known brand variations mapped to canonical names
 
 ### Stage 3 — LLM Extraction
-Calls the Groq API (llama-3.1-8b-instant) to extract `name`, `brand`, and `sub_category` from each product description. Features:
+Calls the Groq API (llama-3.1-8b-instant) to extract `name`, `brand`, and `sub_category` from each product description. 
+| Source | Target |
+|--------|--------|
+| `techmart_silver.products` | `techmart_silver.llm_extracted` |
+
+Features:
 - Jinja2 prompt templates with system/user role separation
 - Pydantic validation of LLM output with automatic retry on invalid response
 - Exponential backoff retry logic for rate limit and network errors
 - MLflow tracing: logs prompt template, model, tokens, latency, success rate
 
 ### Stage 4 — LLM Judge
-A second LLM call validates the extraction against the approved taxonomy. The Judge independently classifies each product and compares with the extractor's result. Features:
+A second LLM call validates the extraction against the approved taxonomy. The Judge independently classifies each product and compares with the extractor's result. 
+
+| Source | Target |
+|--------|--------|
+| `techmart_silver.llm_extracted` | `techmart_silver.taxonomy` |
+
+Features:
 - `judge_taxonomy`: Judge's own classification
 - `judge_approved`: True if Judge agrees with extractor
 - `judge_reason`: Explanation when disagreement occurs
@@ -130,31 +152,23 @@ A second LLM call validates the extraction against the approved taxonomy. The Ju
 ### Stage 5 — Silver Taxonomy Enrichment
 Joins Judge results with vendor information and maps sub-categories to parent categories. Produces the final enriched Silver table ready for Gold aggregation.
 
+| Sources | Target |
+|---------|--------|
+| `techmart_silver.taxonomy` + `techmart_silver.vendors` + `techmart_silver.products` | `techmart_silver.taxonomy_enriched` |
+
+
 ### Stage 6 — Gold Aggregation
 Aggregates only Judge-approved records by Category and Sub-Category, producing business-ready metrics: number of products, average price, minimum price, maximum price.
+| Source | Target |
+|--------|--------|
+| `techmart_silver.taxonomy_enriched` | `techmart_gold.product_summary` |
 
----
-
-## Key Design Decisions
-
-### Why Medallion Architecture?
-Separates raw data (Bronze) from clean data (Silver) from business data (Gold). Each layer is independently queryable, replayable, and auditable. Upstream failures never corrupt downstream layers.
-
-### Why Delta Lake over Parquet?
-Delta Lake adds ACID transactions, schema evolution, time travel, and `MERGE` operations on top of Parquet. These are essential for production pipelines that need idempotency and auditability.
-
-### Why Two LLM Calls Instead of One?
-The extractor uses a constrained list of allowed sub-categories. The Judge uses a broader approved taxonomy and independently classifies each product. This separation catches classification errors that a single LLM call cannot detect, implementing the LLM-as-Judge pattern used in production AI systems.
-
-### Why Groq Instead of OpenAI?
-Groq's free tier provides sufficient quota for this dataset size. The Groq API is fully compatible with the OpenAI message format — switching providers requires changing only three lines in `config.py`.
-
-### Why Pydantic for LLM Output Validation?
-LLMs occasionally return malformed JSON or missing fields. Pydantic validates the response structure and triggers an automatic retry when validation fails — preventing invalid data from entering the pipeline silently.
-
-### Why Jinja2 for Prompt Templates?
-Separates prompt content from pipeline code. Prompts are versioned independently via Git commit hash, logged as MLflow artifacts, and can be modified without touching notebook code.
-
+| Metric | Description |
+|--------|-------------|
+| `num_products` | Number of products per category |
+| `avg_price_usd` | Average unit price |
+| `min_price_usd` | Lowest unit price |
+| `max_price_usd` | Highest unit price |
 ---
 
 ## Setup Instructions
